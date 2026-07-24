@@ -10,12 +10,11 @@ import {
   type MessageActionSlot,
 } from '../../components/MessageActionBar';
 
-const DEFAULT_BAR_WITH_TOOLS: MessageActionSlot[] = ['viewThread', 'delAndRegenerate', 'copy'];
-const DEFAULT_BAR: MessageActionSlot[] = ['viewThread', 'edit', 'copy'];
+const DEFAULT_BAR_WITH_TOOLS: MessageActionSlot[] = ['delAndRegenerate', 'copy'];
+const DEFAULT_BAR: MessageActionSlot[] = ['edit', 'copy'];
 const DEFAULT_MENU: MessageActionSlot[] = [
   'edit',
   'copy',
-  'viewThread',
   'branching',
   'collapse',
   'divider',

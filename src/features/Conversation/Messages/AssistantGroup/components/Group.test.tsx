@@ -102,19 +102,13 @@ vi.mock('./WorkflowCollapse', () => ({
 vi.mock('./ProcessFold', () => ({
   default: ({
     children,
-    defaultExpanded,
     stepCount,
   }: {
     children?: ReactNode;
-    defaultExpanded?: boolean;
     durationText?: string;
     stepCount: number;
   }) => (
-    <div
-      data-default-expanded={defaultExpanded ? 'true' : 'false'}
-      data-step-count={stepCount}
-      data-testid="process-fold"
-    >
+    <div data-step-count={stepCount} data-testid="process-fold">
       {children}
     </div>
   ),
@@ -413,31 +407,6 @@ describe('Group', () => {
     // sibling for every turn, latest or not — never swallowed into the fold.
     expect(fold.contains(answer)).toBe(false);
     expect(fold.contains(screen.getByTestId('workflow-segment'))).toBe(true);
-  });
-
-  it('starts the process expanded when requested by the Thread detail view', () => {
-    render(
-      <Group
-        defaultProcessExpanded
-        enableProcessFold
-        id="assistant-1"
-        isLatestItem={false}
-        messageIndex={0}
-        blocks={[
-          blk({
-            content: 'Running the checks.',
-            id: 'block-1',
-            tools: [
-              { apiName: 'bash', id: 'tool-1', result: { content: 'ok' } } as any,
-              { apiName: 'bash', id: 'tool-2', result: { content: 'ok' } } as any,
-            ],
-          }),
-          blk({ content: 'Here is the final answer.', id: 'block-2' }),
-        ]}
-      />,
-    );
-
-    expect(screen.getByTestId('process-fold')).toHaveAttribute('data-default-expanded', 'true');
   });
 
   it('keeps the latest finished turn’s final answer visible outside the fold', () => {
