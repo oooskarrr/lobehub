@@ -71,6 +71,7 @@ const findLatestWorkRootOperationId = (
 };
 
 interface GroupMessageProps {
+  defaultProcessExpanded?: boolean;
   defaultWorkflowExpandLevel?: WorkflowExpandLevelDefault;
   disableEditing?: boolean;
   footerRender?: ReactNode;
@@ -80,7 +81,15 @@ interface GroupMessageProps {
 }
 
 const GroupMessage = memo<GroupMessageProps>(
-  ({ defaultWorkflowExpandLevel, id, index, disableEditing, footerRender, isLatestItem }) => {
+  ({
+    defaultProcessExpanded,
+    defaultWorkflowExpandLevel,
+    id,
+    index,
+    disableEditing,
+    footerRender,
+    isLatestItem,
+  }) => {
     // Get message and actionsConfig from ConversationStore
     const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual)!;
 
@@ -288,6 +297,7 @@ const GroupMessage = memo<GroupMessageProps>(
               enableProcessFold
               blocks={children}
               content={lastAssistantMsg?.content}
+              defaultProcessExpanded={defaultProcessExpanded}
               contentId={contentId}
               // Folding a finished turn's process is the default behavior now
               // (graduated from Labs) — always on for the conversation.

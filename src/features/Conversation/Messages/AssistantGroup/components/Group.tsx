@@ -46,6 +46,8 @@ interface GroupChildrenProps {
   blocks: AssistantContentBlock[];
   content?: string;
   contentId?: string;
+  /** Whether the finished process fold starts expanded. */
+  defaultProcessExpanded?: boolean;
   defaultWorkflowExpandLevel?: WorkflowExpandLevelDefault;
   disableEditing?: boolean;
   /** Lab flag: fold finished non-latest turns' process under a "已处理" header. */
@@ -438,6 +440,7 @@ const Group = memo<GroupChildrenProps>(
     content,
     isLatestItem,
     enableProcessFold,
+    defaultProcessExpanded,
   }) => {
     const [isCollapsed, isGenerating] = useConversationStore((s) => [
       messageStateSelectors.isMessageCollapsed(id)(s),
@@ -592,7 +595,11 @@ const Group = memo<GroupChildrenProps>(
         <Flexbox className={styles.container} gap={8}>
           {foldProcess ? (
             <>
-              <ProcessFold durationText={durationText} stepCount={processStepCount}>
+              <ProcessFold
+                defaultExpanded={defaultProcessExpanded}
+                durationText={durationText}
+                stepCount={processStepCount}
+              >
                 <Flexbox gap={8}>
                   {processSegments.map((segment) =>
                     renderSegment(segment, segments.indexOf(segment)),

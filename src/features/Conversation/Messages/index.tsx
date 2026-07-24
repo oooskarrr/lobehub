@@ -151,6 +151,7 @@ const MessageItem = memo<MessageItemProps>(
         case 'assistantGroup': {
           return (
             <AssistantGroupMessage
+              defaultProcessExpanded={inPortalThread}
               defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
               disableEditing={disableEditing}
               footerRender={footerRender}
@@ -168,6 +169,7 @@ const MessageItem = memo<MessageItemProps>(
           // turn. Keeps a single code path instead of a thinner duplicate.
           return (
             <AssistantGroupMessage
+              defaultProcessExpanded={inPortalThread}
               defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
               disableEditing={disableEditing}
               footerRender={footerRender}
