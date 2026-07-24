@@ -1,5 +1,6 @@
 'use client';
 
+import { ThreadType } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { memo, Suspense, useCallback, useMemo } from 'react';
 
@@ -132,9 +133,13 @@ const ThreadChat = memo(() => {
   // executor on every spawn — unambiguous marker to flip the thread into a
   // read-only record (hides composer, wipes per-message actions, disables
   // double-click editing).
-  const isSubagentThread = useChatStore(
-    (s) => !!portalThreadSelectors.portalCurrentThread(s)?.metadata?.sourceToolCallId,
-  );
+  const portalThread = useChatStore(portalThreadSelectors.portalCurrentThread);
+  const isSubagentThread =
+    portalThread?.type === ThreadType.Isolation || !!portalThread?.metadata?.sourceToolCallId;
+  // Isolation execution may be owned by an Agent other than the topic owner.
+  // Fetch and render the Thread with that Agent's scope while leaving the
+  // projected source message in the main conversation's scope.
+  const threadAgentId = portalThread?.agentId || activeAgentId;
 
   // Get thread-specific actionsBar config
   const actionsBarConfig = useThreadActionsBarConfig({ readonly: isSubagentThread });
@@ -146,7 +151,7 @@ const ThreadChat = memo(() => {
   // Context for ConversationProvider (includes sourceMessageId/threadType for new thread creation)
   const context: ConversationContext = useMemo(
     () => ({
-      agentId: activeAgentId,
+      agentId: threadAgentId,
       // Use isNew + scope for new thread creation
       isNew: isCreatingNewThread,
       scope: 'thread',
@@ -157,7 +162,7 @@ const ThreadChat = memo(() => {
       topicId: activeTopicId,
     }),
     [
-      activeAgentId,
+      threadAgentId,
       activeTopicId,
       portalThreadId,
       threadStartMessageId,
@@ -169,13 +174,13 @@ const ThreadChat = memo(() => {
   // Context for messageMapKey (only needs fields used in key generation)
   const keyContext = useMemo<MessageMapKeyInput>(
     () => ({
-      agentId: activeAgentId,
+      agentId: threadAgentId,
       isNew: isCreatingNewThread,
       scope: 'thread',
       threadId: portalThreadId,
       topicId: activeTopicId,
     }),
-    [activeAgentId, activeTopicId, portalThreadId, isCreatingNewThread],
+    [threadAgentId, activeTopicId, portalThreadId, isCreatingNewThread],
   );
 
   // Generate messageMapKey for direct subscription to dbMessagesMap
@@ -190,7 +195,7 @@ const ThreadChat = memo(() => {
   const operationState = useOperationState(context);
 
   const agentChatConfig = useAgentStore(
-    chatConfigByIdSelectors.getChatConfigById(activeAgentId || ''),
+    chatConfigByIdSelectors.getChatConfigById(threadAgentId || ''),
   );
   const chatFollowUpHooks = useChatFollowUp({
     agentChatConfig,

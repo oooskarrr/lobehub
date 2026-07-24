@@ -132,6 +132,8 @@ interface OperationState {
    * after the event's XADD succeeds.
    */
   publishedKeys: Set<string>;
+  /** Isolation thread that owns this heterogeneous run, when applicable. */
+  threadId: string | undefined;
   /**
    * Run-global DB index for every tool message in the topic, keyed by
    * `tool_call_id`. Main and subagent reducers keep only their per-turn maps;
@@ -473,6 +475,7 @@ export class HeterogeneousPersistenceHandler {
       processedKeys: new Set(),
       publishedKeys: new Set(),
       toolMsgIdByCallId: new Map(),
+      threadId: running.threadId ?? undefined,
       topicId,
     };
     await this.refreshToolMessageIndex(state);
@@ -914,6 +917,7 @@ export class HeterogeneousPersistenceHandler {
             parentId: intent.parentId,
             provider: intent.provider,
             role: 'assistant',
+            threadId: state.threadId,
             topicId: intent.topicId ?? state.topicId,
           } as any,
           intent.messageId,
@@ -972,7 +976,7 @@ export class HeterogeneousPersistenceHandler {
                 type: tool.payload.type,
               },
               role: 'tool',
-              threadId: null,
+              threadId: state.threadId,
               tool_call_id: tool.payload.id,
               topicId: state.topicId,
             } as any,

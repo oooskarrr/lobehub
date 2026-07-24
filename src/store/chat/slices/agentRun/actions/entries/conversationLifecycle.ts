@@ -31,6 +31,7 @@ import {
 } from '@/helpers/agentWorkingDirectory';
 import { resolveExecutionTarget, resolveWorkspaceScoped } from '@/helpers/executionTarget';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
+import { agentService } from '@/services/agent';
 import { aiAgentService } from '@/services/aiAgent';
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
@@ -286,8 +287,16 @@ export class ConversationLifecycleActionImpl {
       : undefined;
     const agentId = directMentionRoute?.agent.id ?? ownerAgentId;
 
-    const agentState = getAgentStoreState();
-    const agentConfig = agentSelectors.getAgentConfigById(agentId)(agentState);
+    let agentState = getAgentStoreState();
+    let agentConfig = agentSelectors.getAgentConfigById(agentId)(agentState);
+    if (directMentionRoute && !agentConfig) {
+      const targetAgentConfig = await agentService.getAgentConfigById(agentId);
+      if (!targetAgentConfig) throw new Error(`Mentioned agent not found: ${agentId}`);
+
+      agentState.internal_dispatchAgentMap(agentId, targetAgentConfig);
+      agentState = getAgentStoreState();
+      agentConfig = agentSelectors.getAgentConfigById(agentId)(agentState);
+    }
     const agent = agentByIdSelectors.getAgentById(agentId)(agentState);
     const currentUserId = userProfileSelectors.userId(getUserStoreState());
     const isAuthor = !!currentUserId && agent?.userId === currentUserId;
