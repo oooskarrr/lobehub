@@ -31,6 +31,7 @@ import {
 } from '@/helpers/agentWorkingDirectory';
 import { resolveExecutionTarget, resolveWorkspaceScoped } from '@/helpers/executionTarget';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
+import { aiAgentService } from '@/services/aiAgent';
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
 import { resolveSelectedSkillsWithContent } from '@/services/chat/mecha/skillPreload';
@@ -1081,7 +1082,7 @@ export class ConversationLifecycleActionImpl {
     }
 
     // ── Gateway mode: skip sendMessageInServer, let execAgentTask handle everything ──
-    if (runtimeType === 'gateway') {
+    if (runtimeType === 'gateway' && !directMentionRoute) {
       try {
         // Pass `sendMessage` as `parentOperationId` so executeGatewayAgent
         // completes it the instant phase-1 init finishes (after the child
@@ -1494,19 +1495,102 @@ export class ConversationLifecycleActionImpl {
     {
       try {
         if (directMentionRoute) {
-          const displayMessages = displayMessageSelectors.getDisplayMessagesByKey(
-            messageMapKey(execContext),
-          )(this.#get());
-          await executeClientAgent({
-            context: { ...execContext, scope: 'sub_agent', subAgentId: agentId },
-            inPortalThread: !!data.createdThreadId,
-            messages: displayMessages,
-            parentMessageId: data.assistantMessageId,
-            parentMessageType: 'assistant',
-            parentOperationId: operationId,
-            skipCreateFirstMessage: true,
-            userMessageId: data.userMessageId,
-          });
+          if (!execContext.topicId) throw new Error('Direct mention requires a persisted topic');
+
+          if (runtimeType === 'gateway') {
+            // Direct mentions execute in an isolation thread, while the thread's
+            // source assistant remains the visible projection in the main topic.
+            const task = await aiAgentService.execSubAgentTask({
+              agentId,
+              instruction: message,
+              parentMessageId: data.assistantMessageId,
+              title: message.slice(0, 50),
+              topicId: execContext.topicId,
+            });
+
+            if (!task.success) throw new Error(task.error || 'Failed to start mentioned agent');
+            void this.#get().refreshThreads();
+
+            // The isolated operation has its own gateway lifecycle. Poll only
+            // the compact task result here so child messages never enter the
+            // main conversation store; project the terminal result in place.
+            const deadline = Date.now() + 1_800_000;
+            while (true) {
+              if (abortController.signal.aborted || Date.now() >= deadline) {
+                await aiAgentService.interruptTask({ threadId: task.threadId });
+                throw new Error(
+                  abortController.signal.aborted
+                    ? 'Mentioned agent execution cancelled'
+                    : 'Mentioned agent execution timed out',
+                );
+              }
+              const status = await aiAgentService.getSubAgentTaskStatus({
+                threadId: task.threadId,
+              });
+              if (status.status === 'completed') {
+                await this.#get().optimisticUpdateMessageContent(
+                  data.assistantMessageId,
+                  status.result || '',
+                  undefined,
+                  { operationId },
+                );
+                break;
+              }
+              if (status.status === 'failed' || status.status === 'cancel') {
+                throw new Error(status.error || 'Mentioned agent execution failed');
+              }
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+            }
+          } else {
+            const task = await aiAgentService.createClientTaskThread({
+              agentId,
+              instruction: message,
+              parentMessageId: data.assistantMessageId,
+              title: message.slice(0, 50),
+              topicId: execContext.topicId,
+            });
+            const threadContext = {
+              ...execContext,
+              agentId,
+              scope: 'sub_agent' as const,
+              subAgentId: agentId,
+              threadId: task.threadId,
+            };
+            this.#get().replaceMessages(task.threadMessages, { context: threadContext });
+            void this.#get().refreshThreads();
+
+            const runtimeResult = await executeClientAgent({
+              context: threadContext,
+              inPortalThread: true,
+              isSubAgent: true,
+              messages: task.threadMessages,
+              parentMessageId: task.userMessageId,
+              parentMessageType: 'user',
+              parentOperationId: operationId,
+            });
+            const threadMessages = this.#get().dbMessagesMap[messageMapKey(threadContext)] || [];
+            const resultContent =
+              threadMessages.findLast((item) => item.role === 'assistant')?.content || '';
+
+            await this.#get().optimisticUpdateMessageContent(
+              data.assistantMessageId,
+              resultContent,
+              undefined,
+              { operationId },
+            );
+            await aiAgentService.updateClientTaskThreadStatus({
+              completionReason: 'done',
+              metadata: {
+                totalCost: runtimeResult?.cost?.total,
+                totalMessages: threadMessages.length,
+                totalTokens: runtimeResult?.usage?.llm?.tokens?.total,
+                totalToolCalls: threadMessages.filter((item) => item.role === 'tool').length,
+              },
+              resultContent,
+              threadId: task.threadId,
+            });
+            void this.#get().refreshThreads();
+          }
         } else {
           const displayMessages = displayMessageSelectors.getDisplayMessagesByKey(
             messageMapKey(execContext),
